@@ -222,9 +222,95 @@ const deleteAllUsers = async (req, res) => {
     }
 };
 
+const getAllUsers = async (req, res) => {
+    try {
+        // Get all users from the database
+        const users = await User.find({}, {
+            password: 0, // Exclude password field
+            __v: 0,     // Exclude version field
+            _id: 0      // Exclude ID field
+        });
+        
+        res.status(200).json({
+            status: 'success',
+            count: users.length,
+            data: users
+        });
+    } catch (error) {
+        console.error('Error in getAllUsers:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'An error occurred while fetching users'
+        });
+    }
+};
+
+const getUsersByFilters = async (req, res) => {
+    try {
+        const { year, semester, section } = req.query;
+        
+        // Build filter object based on provided parameters
+        const filter = {};
+        
+        if (year) {
+            const yearNum = parseInt(year);
+            if (isNaN(yearNum) || ![1, 2, 3, 4].includes(yearNum)) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'Year must be between 1 and 4'
+                });
+            }
+            filter.year = yearNum;
+        }
+        
+        if (semester) {
+            const semesterNum = parseInt(semester);
+            if (isNaN(semesterNum) || ![1, 2].includes(semesterNum)) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'Semester must be 1 or 2'
+                });
+            }
+            filter.semester = semesterNum;
+        }
+        
+        if (section) {
+            const sectionUpper = section.toUpperCase();
+            if (!['A', 'B', 'C', 'D', 'E'].includes(sectionUpper)) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'Section must be A, B, C, D, or E'
+                });
+            }
+            filter.section = sectionUpper;
+        }
+        
+        // Get filtered users from the database
+        const users = await User.find(filter, {
+            password: 0, // Exclude password field
+            __v: 0,     // Exclude version field
+            _id: 0      // Exclude ID field
+        });
+        
+        res.status(200).json({
+            status: 'success',
+            count: users.length,
+            data: users
+        });
+    } catch (error) {
+        console.error('Error in getUsersByFilters:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'An error occurred while fetching users'
+        });
+    }
+};
+
 export default {
     signup,
     signin,
     getUserProfile,
-    deleteAllUsers
+    deleteAllUsers,
+    getAllUsers,
+    getUsersByFilters
 };

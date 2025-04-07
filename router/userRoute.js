@@ -13,4 +13,10 @@ router.get('/profile/:email', userController.getUserProfile);
 // Route for deleting all users
 router.delete('/delete-all', userController.deleteAllUsers);
 
+// Route for getting all users
+router.get('/all', userController.getAllUsers);
+
+// Route for getting users filtered by year, semester, and section
+router.get('/filter', userController.getUsersByFilters);
+
 export default router;
