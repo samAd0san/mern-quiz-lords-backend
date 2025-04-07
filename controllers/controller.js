@@ -29,8 +29,25 @@ export async function getQuestions(req, res) {
             });
         }
 
-        // Default to setOne if rollNumber is not provided
-        const rollInt = rollNumber ? parseInt(rollNumber.slice(-3)) - 1 : 0;
+        // If no rollNumber is provided, return all three sets
+        if (!rollNumber) {
+            const allSets = await Questions.find({ subject: subjectId }).populate('subject');
+            
+            if (!allSets || allSets.length === 0) {
+                return res.status(404).json({ 
+                    status: 'error',
+                    message: "Questions not found for this subject" 
+                });
+            }
+            
+            return res.status(200).json({
+                status: 'success',
+                data: allSets
+            });
+        }
+
+        // Default to setOne if rollNumber is provided
+        const rollInt = parseInt(rollNumber.slice(-3)) - 1;
 
         let set;
         if (rollInt % 3 === 0) {
