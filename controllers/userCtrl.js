@@ -89,8 +89,9 @@ const signup = async(req, res) => {
             
             if (duplicateField === 'email') {
                 errorMessage = 'Email already exists. Please use a different email address.';
-            } else if (duplicateField === 'rollNo') {
-                errorMessage = 'Roll number already exists. Please use a different roll number.';
+            } else if (err.message.includes('rollNo')) {
+                // This is a duplicate rollNumber error
+                errorMessage = 'A user with this roll number already exists. Please use a different roll number.';
             }
             
             res.status(400).json({
@@ -203,8 +204,27 @@ const getUserProfile = async (req, res) => {
     }
 };
 
+const deleteAllUsers = async (req, res) => {
+    try {
+        // Delete all users from the database
+        const result = await User.deleteMany({});
+        
+        res.status(200).json({
+            status: 'success',
+            message: `All users deleted successfully. ${result.deletedCount} users were deleted.`
+        });
+    } catch (error) {
+        console.error('Error in deleteAllUsers:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'An error occurred while deleting all users'
+        });
+    }
+};
+
 export default {
     signup,
     signin,
-    getUserProfile
+    getUserProfile,
+    deleteAllUsers
 };

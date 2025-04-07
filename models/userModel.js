@@ -16,8 +16,8 @@ const schema = new Schema({
     },  
     rollNo: {
         type: String,
-        required: [true, 'Roll No is Required'],
-        unique: true
+        required: false,
+        unique: false
     },
     year: {
         type: Number,

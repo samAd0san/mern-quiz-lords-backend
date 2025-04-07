@@ -7,6 +7,11 @@ const resultModel = new Schema({
         required: [true, 'Roll Number is Required'],
         ref: 'users'
     },
+    subject: {
+        type: Schema.Types.ObjectId,
+        ref: 'Subject',
+        required: [true, 'Subject reference is required']
+    },
     result: { type: Array, default: []},
     attempts: { type: Number, default: 0},
     points: { type: Number, default: 0},

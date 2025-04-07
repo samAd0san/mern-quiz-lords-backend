@@ -1,15 +1,33 @@
 import Questions from "../models/questionSchema.js";
 import Results from "../models/resultSchema.js";
 import User from "../models/userModel.js";
+import Subject from "../models/subjectSchema.js";
 
 import { setOneQuestions, answersSetOne } from '../database/setOne.js';
 import { setTwoQuestions, answersSetTwo } from '../database/setTwo.js';
 import { setThreeQuestions, answersSetThree } from '../database/setThree.js';
 
-/** Get questions based on roll number */
+/** Get questions based on roll number and subject */
 export async function getQuestions(req, res) {
     try {
         const { rollNumber } = req.query; // Get roll number from query parameters
+        const subjectId = req.query.subjectId || req.params.subjectId; // Get subjectId from query or path parameters
+        
+        if (!subjectId) {
+            return res.status(400).json({
+                status: 'error',
+                message: "Subject ID is required"
+            });
+        }
+
+        // Check if subject exists
+        const subject = await Subject.findById(subjectId);
+        if (!subject) {
+            return res.status(404).json({
+                status: 'error',
+                message: "Subject not found"
+            });
+        }
 
         // Default to setOne if rollNumber is not provided
         const rollInt = rollNumber ? parseInt(rollNumber.slice(-3)) - 1 : 0;
@@ -25,12 +43,12 @@ export async function getQuestions(req, res) {
 
         console.log("Querying set:", set); // debug
 
-        const questions = await Questions.findOne({ set });
+        const questions = await Questions.findOne({ set, subject: subjectId }).populate('subject');
         console.log("Found questions:", questions); // Additional debugging statement
     
         if (!questions) return res.status(404).json({ 
             status: 'error',
-            message: "Questions not found" 
+            message: "Questions not found for this subject" 
         });
 
         res.status(200).json({
@@ -46,14 +64,42 @@ export async function getQuestions(req, res) {
     }
 }
 
-/** Insert all questions */
+/** Insert questions for a subject */
 export async function insertQuestions(req, res) {
     try {
+        const { subjectId } = req.params;
+        
+        if (!subjectId) {
+            return res.status(400).json({
+                status: 'error',
+                message: "Subject ID is required"
+            });
+        }
+        
+        // Check if subject exists
+        const subject = await Subject.findById(subjectId);
+        if (!subject) {
+            return res.status(404).json({
+                status: 'error',
+                message: "Subject not found"
+            });
+        }
+        
+        // Check if questions already exist for this subject
+        const existingQuestions = await Questions.findOne({ subject: subjectId });
+        if (existingQuestions) {
+            return res.status(400).json({
+                status: 'error',
+                message: "Questions already exist for this subject"
+            });
+        }
+        
         await Questions.insertMany([
-            { set: 'setOne', questions: setOneQuestions, answers: answersSetOne },
-            { set: 'setTwo', questions: setTwoQuestions, answers: answersSetTwo },
-            { set: 'setThree', questions: setThreeQuestions, answers: answersSetThree }
+            { set: 'setOne', subject: subjectId, questions: setOneQuestions, answers: answersSetOne },
+            { set: 'setTwo', subject: subjectId, questions: setTwoQuestions, answers: answersSetTwo },
+            { set: 'setThree', subject: subjectId, questions: setThreeQuestions, answers: answersSetThree }
         ]);
+        
         res.status(201).json({ 
             status: 'success',
             message: "Questions Saved Successfully" 
@@ -67,10 +113,28 @@ export async function insertQuestions(req, res) {
     }
 }
 
-/** Delete all Questions */
+/** Delete questions for a subject */
 export async function dropQuestions(req, res) {
     try {
-        await Questions.deleteMany();
+        const { subjectId } = req.query;
+        
+        if (!subjectId) {
+            return res.status(400).json({
+                status: 'error',
+                message: "Subject ID is required"
+            });
+        }
+        
+        // Check if subject exists
+        const subject = await Subject.findById(subjectId);
+        if (!subject) {
+            return res.status(404).json({
+                status: 'error',
+                message: "Subject not found"
+            });
+        }
+        
+        await Questions.deleteMany({ subject: subjectId });
         res.status(200).json({ 
             status: 'success',
             message: "Questions Deleted Successfully" 
@@ -87,7 +151,17 @@ export async function dropQuestions(req, res) {
 /** Get all results */
 export async function getResult(req, res) {
     try {
-        const results = await Results.find().populate('rollNumber', 'firstName lastName email year semester section');
+        const { subjectId } = req.query;
+        
+        let query = {};
+        if (subjectId) {
+            query.subject = subjectId;
+        }
+        
+        const results = await Results.find(query)
+            .populate('rollNumber', 'firstName lastName email year semester section')
+            .populate('subject', 'name branch year semester');
+            
         res.status(200).json({
             status: 'success',
             data: results
@@ -104,19 +178,28 @@ export async function getResult(req, res) {
 /** Post all results */
 export async function storeResult(req, res) {
     try {
-        const { rollNumber, result, attempts, points, achieved } = req.body;
-        if (!rollNumber || !result) throw new Error('Roll Number and Result are Required');
+        const { rollNumber, subjectId, result, attempts, points, achieved } = req.body;
+        if (!rollNumber || !result || !subjectId) throw new Error('Roll Number, Subject ID, and Result are Required');
 
-        // Check if user exists
+        // Check if at least one user exists with this roll number
         const user = await User.findOne({ rollNo: rollNumber });
         if (!user) {
             return res.status(404).json({ 
                 status: 'error',
-                message: 'User not found with this roll number' 
+                message: 'No user found with this roll number' 
+            });
+        }
+        
+        // Check if subject exists
+        const subject = await Subject.findById(subjectId);
+        if (!subject) {
+            return res.status(404).json({ 
+                status: 'error',
+                message: 'Subject not found' 
             });
         }
 
-        await Results.create({ rollNumber, result, attempts, points, achieved });
+        await Results.create({ rollNumber, subject: subjectId, result, attempts, points, achieved });
         res.status(201).json({ 
             status: 'success',
             message: "Result Saved Successfully" 
@@ -133,7 +216,14 @@ export async function storeResult(req, res) {
 /** Delete all results */
 export async function dropResult(req, res) {
     try {
-        await Results.deleteMany();
+        const { subjectId } = req.query;
+        
+        let query = {};
+        if (subjectId) {
+            query.subject = subjectId;
+        }
+        
+        await Results.deleteMany(query);
         res.status(200).json({ 
             status: 'success',
             message: "Results Deleted Successfully" 
@@ -143,6 +233,196 @@ export async function dropResult(req, res) {
         res.status(500).json({ 
             status: 'error',
             message: 'An error occurred while deleting results' 
+        });
+    }
+}
+
+/** Get all subjects */
+export async function getAllSubjects(req, res) {
+    try {
+        const subjects = await Subject.find();
+        res.status(200).json({
+            status: 'success',
+            data: subjects
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ 
+            status: 'error',
+            message: 'An error occurred while fetching subjects' 
+        });
+    }
+}
+
+/** Get subjects by branch, year, and semester */
+export async function getSubjectsByBranchYearSemester(req, res) {
+    try {
+        const { branch, year, semester } = req.params;
+        
+        // Validate parameters
+        if (!branch || !year || !semester) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Branch, year, and semester are required'
+            });
+        }
+        
+        // Convert year and semester to numbers
+        const yearNum = parseInt(year);
+        const semesterNum = parseInt(semester);
+        
+        // Validate year and semester values
+        if (isNaN(yearNum) || yearNum < 1 || yearNum > 4) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Year must be between 1 and 4'
+            });
+        }
+        
+        if (isNaN(semesterNum) || semesterNum < 1 || semesterNum > 2) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Semester must be 1 or 2'
+            });
+        }
+        
+        // Find subjects by branch, year, and semester
+        const subjects = await Subject.find({ 
+            branch: branch.toUpperCase(), 
+            year: yearNum, 
+            semester: semesterNum 
+        });
+        
+        if (subjects.length === 0) {
+            return res.status(404).json({ 
+                status: 'error',
+                message: 'No subjects found for this branch, year, and semester' 
+            });
+        }
+        
+        res.status(200).json({
+            status: 'success',
+            data: subjects
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ 
+            status: 'error',
+            message: 'An error occurred while fetching subjects' 
+        });
+    }
+}
+
+/** Create a new subject */
+export async function createSubject(req, res) {
+    try {
+        const { name, branch, year, semester } = req.body;
+        
+        // Validate required fields
+        if (!name || !branch || !year || !semester) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Name, branch, year, and semester are required'
+            });
+        }
+        
+        // Create new subject without checking for duplicates
+        const subject = new Subject({
+            name,
+            branch: branch.toUpperCase(),
+            year,
+            semester
+        });
+        
+        await subject.save();
+        
+        res.status(201).json({
+            status: 'success',
+            message: 'Subject created successfully',
+            data: subject
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ 
+            status: 'error',
+            message: error.message || 'An error occurred while creating the subject' 
+        });
+    }
+}
+
+/** Update a subject */
+export async function updateSubject(req, res) {
+    try {
+        const { id } = req.params;
+        const { name, branch, year, semester } = req.body;
+        
+        // Check if subject exists
+        const subject = await Subject.findById(id);
+        if (!subject) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Subject not found'
+            });
+        }
+        
+        // Update subject
+        if (name) subject.name = name;
+        if (branch) subject.branch = branch.toUpperCase();
+        if (year) subject.year = year;
+        if (semester) subject.semester = semester;
+        
+        await subject.save();
+        
+        res.status(200).json({
+            status: 'success',
+            message: 'Subject updated successfully',
+            data: subject
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ 
+            status: 'error',
+            message: error.message || 'An error occurred while updating the subject' 
+        });
+    }
+}
+
+/** Delete a subject */
+export async function deleteSubject(req, res) {
+    try {
+        const { id } = req.params;
+        
+        // Check if subject exists
+        const subject = await Subject.findById(id);
+        if (!subject) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Subject not found'
+            });
+        }
+        
+        // Check if there are any questions or results associated with this subject
+        const questionsCount = await Questions.countDocuments({ subject: id });
+        const resultsCount = await Results.countDocuments({ subject: id });
+        
+        if (questionsCount > 0 || resultsCount > 0) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Cannot delete subject because it has associated questions or results'
+            });
+        }
+        
+        await Subject.findByIdAndDelete(id);
+        
+        res.status(200).json({
+            status: 'success',
+            message: 'Subject deleted successfully'
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ 
+            status: 'error',
+            message: error.message || 'An error occurred while deleting the subject' 
         });
     }
 }
