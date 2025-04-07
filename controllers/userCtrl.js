@@ -1,84 +1,205 @@
 import bcrypt from 'bcrypt';
-import UserRepo from '../repositories/userRepo.js';
 import jwt from 'jsonwebtoken';
 import config from '../config/index.js';
+import User from '../models/userModel.js';
 
 const emailExists = (err) => err.message 
     && err.message.indexOf('duplicate key error') > -1;
 
-const signup = async(req,res) => {
-    try{
+const getDuplicateField = (err) => {
+    if (err.message.includes('email')) return 'email';
+    if (err.message.includes('rollNo')) return 'rollNo';
+    return null;
+};
+
+const validateUserData = (data) => {
+    const errors = [];
+    
+    // Validate year
+    if (![1, 2, 3, 4].includes(data.year)) {
+        errors.push('Year must be between 1 and 4');
+    }
+    
+    // Validate semester
+    if (![1, 2].includes(data.semester)) {
+        errors.push('Semester must be 1 or 2');
+    }
+    
+    // Validate section
+    if (!['A', 'B', 'C', 'D', 'E'].includes(data.section.toUpperCase())) {
+        errors.push('Section must be A, B, C, D, or E');
+    }
+    
+    // Validate email format
+    if (!/^[a-zA-Z0-9._-]+@lords\.ac\.in$/.test(data.email)) {
+        errors.push('Email must be in format: username@lords.ac.in');
+    }
+    
+    return errors;
+};
+
+const signup = async(req, res) => {
+    try {
         const payload = req.body;
-        payload.password = await bcrypt.hash(payload.password, 2);
+
         
-        console.log('User Added:',payload);
+        
+        // Validate user data
+        const validationErrors = validateUserData(payload);
+        if (validationErrors.length > 0) {
+            return res.status(400).json({
+                status: 'error',
+                errors: validationErrors
+            });
+        }
+        
+        // Check if this is a preview request
+        if (payload.preview) {
+            return res.status(200).json({
+                status: 'preview',
+                userData: {
+                    firstName: payload.firstName,
+                    lastName: payload.lastName,
+                    rollNo: payload.rollNo,
+                    year: payload.year,
+                    semester: payload.semester,
+                    section: payload.section.toUpperCase(),
+                    email: payload.email
+                }
+            });
+        }
+        
+        // Proceed with actual signup
+        payload.password = await bcrypt.hash(payload.password, 2);
+        payload.section = payload.section.toUpperCase();
         payload.createdDate = new Date();
         
+        const user = new User(payload);
+        await user.save();
         
-        await UserRepo.signup(payload);
-
-        res.status(201).send('Created');   
-    }catch(err){
+        res.status(201).json({
+            status: 'success',
+            message: 'User created successfully'
+        });
+    } catch(err) {
         console.log(err.message);
-        if(emailExists(err)){
-            res.status(400).send('Email Already Exists');
-        }else{
-            res.status(500).send('Internal Server Error');
+        if(emailExists(err)) {
+            const duplicateField = getDuplicateField(err);
+            let errorMessage = 'Duplicate entry error';
+            
+            if (duplicateField === 'email') {
+                errorMessage = 'Email already exists. Please use a different email address.';
+            } else if (duplicateField === 'rollNo') {
+                errorMessage = 'Roll number already exists. Please use a different roll number.';
+            }
+            
+            res.status(400).json({
+                status: 'error',
+                message: errorMessage
+            });
+        } else {
+            res.status(500).json({
+                status: 'error',
+                message: 'Internal Server Error'
+            });
         }
     }
 };
 
-const signin = async(req,res) => {
+const signin = async(req, res) => {
     try {
         const payload = req.body;
-        const dbUser = await UserRepo.getUserByEmail(payload.email);
+        const dbUser = await User.findOne(
+            {email: payload.email},
+            {_id: 0, createdDate: 0, updatedDate: 0, __v: 0}
+        );
 
-        if(!dbUser){
-            res.status(404).send('Invalid Email');
-            return;
-        }
-
-        const isValid = await bcrypt.compare(payload.password,dbUser.password); 
-
-        if(isValid){
-            console.log('JWT Secret:', config.jwtSecret);
-            res.status(200).json({
-                username: dbUser.username,
-                token: jwt.sign({email: dbUser.email}, config.jwtSecret, {expiresIn: '1d'}),
+        if(!dbUser) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Invalid Email'
             });
-        }else{
-            res.status(401).send('Invalid password');
         }
-    }catch(err){
+
+        const isValid = await bcrypt.compare(payload.password, dbUser.password);
+
+        if(isValid) {
+            // If valid, creates a JWT token with user info, valid for 1 day.
+            const token = jwt.sign(
+                { 
+                    email: dbUser.email,
+                    role: dbUser.role,
+                    year: dbUser.year,
+                    semester: dbUser.semester,
+                    section: dbUser.section
+                }, 
+                config.jwtSecret, 
+                {expiresIn: '1d'}
+            );
+            
+            // Returns a success response with user info and the token.
+            res.status(200).json({
+                status: 'success',
+                data: {
+                    firstName: dbUser.firstName,
+                    lastName: dbUser.lastName,
+                    email: dbUser.email,
+                    role: dbUser.role,
+                    year: dbUser.year,
+                    semester: dbUser.semester,
+                    section: dbUser.section,
+                    token
+                }
+            });
+        } else {
+            res.status(401).json({
+                status: 'error',
+                message: 'Invalid password'
+            });
+        }
+    } catch(err) {
         console.log(err);
-        res.status(500).send('Internal Server Error');
+        res.status(500).json({
+            status: 'error',
+            message: 'Internal Server Error'
+        });
     }
 };
 
 const getUserProfile = async (req, res) => {
     try {
         const email = req.params.email;
-        const user = await UserRepo.getUserByEmail(email);
+        const user = await User.findOne(
+            {email: email},
+            {_id: 0, createdDate: 0, updatedDate: 0, __v: 0}
+        );
 
         if (user) {
             res.status(200).json({
-                firstName: user.firstName,
-                lastName: user.lastName,
-                rollNo: user.rollNo,
-                branch: user.Branch,
-                section: user.Section,
-                email: user.email,
-                role: user.role,
+                status: 'success',
+                data: {
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    rollNo: user.rollNo,
+                    year: user.year,
+                    semester: user.semester,
+                    section: user.section,
+                    email: user.email,
+                    role: user.role
+                }
             });
         } else {
-            res.status(404).send('User not found');
+            res.status(404).json({
+                status: 'error',
+                message: 'User not found'
+            });
         }
     } catch (error) {
-        logger.error({
-            location: 'userCtrl - getUserProfile',
-            error: error,
+        console.error('Error in getUserProfile:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Internal Server Error'
         });
-        res.status(500).send('Internal Server Error');
     }
 };
 
