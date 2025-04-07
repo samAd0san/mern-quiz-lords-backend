@@ -8,50 +8,12 @@ const emailExists = (err) => err.message
 
 const getDuplicateField = (err) => {
     if (err.message.includes('email')) return 'email';
-    if (err.message.includes('rollNo')) return 'rollNo';
     return null;
-};
-
-const validateUserData = (data) => {
-    const errors = [];
-    
-    // Validate year
-    if (![1, 2, 3, 4].includes(data.year)) {
-        errors.push('Year must be between 1 and 4');
-    }
-    
-    // Validate semester
-    if (![1, 2].includes(data.semester)) {
-        errors.push('Semester must be 1 or 2');
-    }
-    
-    // Validate section
-    if (!['A', 'B', 'C', 'D', 'E'].includes(data.section.toUpperCase())) {
-        errors.push('Section must be A, B, C, D, or E');
-    }
-    
-    // Validate email format
-    if (!/^[a-zA-Z0-9._-]+@lords\.ac\.in$/.test(data.email)) {
-        errors.push('Email must be in format: username@lords.ac.in');
-    }
-    
-    return errors;
 };
 
 const signup = async(req, res) => {
     try {
         const payload = req.body;
-
-        
-        
-        // Validate user data
-        const validationErrors = validateUserData(payload);
-        if (validationErrors.length > 0) {
-            return res.status(400).json({
-                status: 'error',
-                errors: validationErrors
-            });
-        }
         
         // Check if this is a preview request
         if (payload.preview) {
@@ -61,17 +23,41 @@ const signup = async(req, res) => {
                     firstName: payload.firstName,
                     lastName: payload.lastName,
                     rollNo: payload.rollNo,
+                    branch: payload.branch,
                     year: payload.year,
                     semester: payload.semester,
-                    section: payload.section.toUpperCase(),
+                    section: payload.section,
                     email: payload.email
                 }
             });
         }
         
-        // Proceed with actual signup
+        // Check if user with this rollNo already exists
+        if (payload.rollNo) {
+            const existingUser = await User.findOne({ rollNo: payload.rollNo });
+            if (existingUser) {
+                // Update the existing user instead of creating a new one
+                existingUser.firstName = payload.firstName;
+                existingUser.lastName = payload.lastName;
+                existingUser.branch = payload.branch;
+                existingUser.year = payload.year;
+                existingUser.semester = payload.semester;
+                existingUser.section = payload.section;
+                existingUser.email = payload.email;
+                existingUser.password = await bcrypt.hash(payload.password, 2);
+                existingUser.updatedDate = new Date();
+                
+                await existingUser.save();
+                
+                return res.status(200).json({
+                    status: 'success',
+                    message: 'User updated successfully'
+                });
+            }
+        }
+        
+        // Proceed with actual signup for new user
         payload.password = await bcrypt.hash(payload.password, 2);
-        payload.section = payload.section.toUpperCase();
         payload.createdDate = new Date();
         
         const user = new User(payload);
@@ -89,9 +75,6 @@ const signup = async(req, res) => {
             
             if (duplicateField === 'email') {
                 errorMessage = 'Email already exists. Please use a different email address.';
-            } else if (err.message.includes('rollNo')) {
-                // This is a duplicate rollNumber error
-                errorMessage = 'A user with this roll number already exists. Please use a different roll number.';
             }
             
             res.status(400).json({
@@ -130,6 +113,7 @@ const signin = async(req, res) => {
                 { 
                     email: dbUser.email,
                     role: dbUser.role,
+                    branch: dbUser.branch,
                     year: dbUser.year,
                     semester: dbUser.semester,
                     section: dbUser.section
@@ -146,6 +130,7 @@ const signin = async(req, res) => {
                     lastName: dbUser.lastName,
                     email: dbUser.email,
                     role: dbUser.role,
+                    branch: dbUser.branch,
                     year: dbUser.year,
                     semester: dbUser.semester,
                     section: dbUser.section,
@@ -182,6 +167,7 @@ const getUserProfile = async (req, res) => {
                     firstName: user.firstName,
                     lastName: user.lastName,
                     rollNo: user.rollNo,
+                    branch: user.branch,
                     year: user.year,
                     semester: user.semester,
                     section: user.section,
@@ -247,42 +233,27 @@ const getAllUsers = async (req, res) => {
 
 const getUsersByFilters = async (req, res) => {
     try {
-        const { year, semester, section } = req.query;
+        const { year, semester, section, branch } = req.query;
         
         // Build filter object based on provided parameters
         const filter = {};
         
         if (year) {
             const yearNum = parseInt(year);
-            if (isNaN(yearNum) || ![1, 2, 3, 4].includes(yearNum)) {
-                return res.status(400).json({
-                    status: 'error',
-                    message: 'Year must be between 1 and 4'
-                });
-            }
             filter.year = yearNum;
         }
         
         if (semester) {
             const semesterNum = parseInt(semester);
-            if (isNaN(semesterNum) || ![1, 2].includes(semesterNum)) {
-                return res.status(400).json({
-                    status: 'error',
-                    message: 'Semester must be 1 or 2'
-                });
-            }
             filter.semester = semesterNum;
         }
         
         if (section) {
-            const sectionUpper = section.toUpperCase();
-            if (!['A', 'B', 'C', 'D', 'E'].includes(sectionUpper)) {
-                return res.status(400).json({
-                    status: 'error',
-                    message: 'Section must be A, B, C, D, or E'
-                });
-            }
-            filter.section = sectionUpper;
+            filter.section = section;
+        }
+        
+        if (branch) {
+            filter.branch = branch;
         }
         
         // Get filtered users from the database

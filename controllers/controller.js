@@ -305,7 +305,7 @@ export async function getSubjectsByBranchYearSemester(req, res) {
         
         // Find subjects by branch, year, and semester
         const subjects = await Subject.find({ 
-            branch: branch.toUpperCase(), 
+            branch: branch, 
             year: yearNum, 
             semester: semesterNum 
         });
@@ -346,7 +346,7 @@ export async function createSubject(req, res) {
         // Create new subject without checking for duplicates
         const subject = new Subject({
             name,
-            branch: branch.toUpperCase(),
+            branch: branch,
             year,
             semester
         });
@@ -384,7 +384,7 @@ export async function updateSubject(req, res) {
         
         // Update subject
         if (name) subject.name = name;
-        if (branch) subject.branch = branch.toUpperCase();
+        if (branch) subject.branch = branch;
         if (year) subject.year = year;
         if (semester) subject.semester = semester;
         

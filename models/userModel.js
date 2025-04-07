@@ -4,61 +4,43 @@ const Schema = mongoose.Schema;
 const schema = new Schema({
     firstName: {
         type: String,
-        required: [true, 'First Name is mandatory'],
-        minLength: [2, 'Min 2 characters'],
-        maxLength: [15, 'Max 15 characters']
+        required: true
     },
     lastName: {
         type: String,
-        required: [true, 'Last Name is Required'],
-        minLength: [2, 'Min 2 characters'],
-        maxLength: [15, 'Max 15 characters']
+        required: true
     },  
     rollNo: {
         type: String,
         required: false,
         unique: false
     },
+    branch: {
+        type: String,
+        required: true,
+        uppercase: true
+    },
     year: {
         type: Number,
-        required: [true, 'Year is Required'],
-        enum: [1, 2, 3, 4],
-        validate: {
-            validator: Number.isInteger,
-            message: 'Year must be between 1 and 4'
-        }
+        required: true
     },
     semester: {
         type: Number,
-        required: [true, 'Semester is Required'],
-        enum: [1, 2],
-        validate: {
-            validator: Number.isInteger,
-            message: 'Semester must be 1 or 2'
-        }
+        required: true
     },
     section: {
         type: String,
-        required: [true, 'Section is Required'],
-        enum: ['A', 'B', 'C', 'D', 'E'],
+        required: true,
         uppercase: true
     },
     email: {
         type: String,
-        required: [true, 'Email is Required'],
-        unique: true,
-        validate: {
-            validator: function(value) {
-                // Validate email format for lords.ac.in domain
-                return /^[a-zA-Z0-9._-]+@lords\.ac\.in$/.test(value);
-            },
-            message: 'Email must be in format: username@lords.ac.in'
-        }
+        required: true,
+        unique: true
     },
     password: { 
         type: String,
-        required: [true, 'Password is Required'],
-        minLength: [6, 'Password must be at least 6 characters']
+        required: true
     },
     active: { type: Boolean, default: true },
     role: { type: String, default: 'User' },
