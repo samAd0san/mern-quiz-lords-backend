@@ -1,5 +1,6 @@
 import Questions from "../models/questionSchema.js";
 import Results from "../models/resultSchema.js";
+import User from "../models/userModel.js";
 
 import { setOneQuestions, answersSetOne } from '../database/setOne.js';
 import { setTwoQuestions, answersSetTwo } from '../database/setTwo.js';
@@ -27,12 +28,21 @@ export async function getQuestions(req, res) {
         const questions = await Questions.findOne({ set });
         console.log("Found questions:", questions); // Additional debugging statement
     
-        if (!questions) return res.status(404).json({ error: "Questions not found" });
+        if (!questions) return res.status(404).json({ 
+            status: 'error',
+            message: "Questions not found" 
+        });
 
-        res.json(questions);
+        res.status(200).json({
+            status: 'success',
+            data: questions
+        });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "An error occurred while fetching questions" });
+        res.status(500).json({ 
+            status: 'error',
+            message: "An error occurred while fetching questions" 
+        });
     }
 }
 
@@ -44,10 +54,16 @@ export async function insertQuestions(req, res) {
             { set: 'setTwo', questions: setTwoQuestions, answers: answersSetTwo },
             { set: 'setThree', questions: setThreeQuestions, answers: answersSetThree }
         ]);
-        res.status(201).json({ msg: "Data Saved Successfully" });
+        res.status(201).json({ 
+            status: 'success',
+            message: "Questions Saved Successfully" 
+        });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "An error occurred while inserting questions" });
+        res.status(500).json({ 
+            status: 'error',
+            message: "An error occurred while inserting questions" 
+        });
     }
 }
 
@@ -55,35 +71,62 @@ export async function insertQuestions(req, res) {
 export async function dropQuestions(req, res) {
     try {
         await Questions.deleteMany();
-        res.json({ msg: "Questions Deleted Successfully" });
+        res.status(200).json({ 
+            status: 'success',
+            message: "Questions Deleted Successfully" 
+        });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error });
+        res.status(500).json({ 
+            status: 'error',
+            message: "An error occurred while deleting questions" 
+        });
     }
 }
 
 /** Get all results */
 export async function getResult(req, res) {
     try {
-        const results = await Results.find();
-        res.json(results);
+        const results = await Results.find().populate('rollNumber', 'firstName lastName email year semester section');
+        res.status(200).json({
+            status: 'success',
+            data: results
+        });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error });
+        res.status(500).json({ 
+            status: 'error',
+            message: 'An error occurred while fetching results' 
+        });
     }
 }
 
 /** Post all results */
 export async function storeResult(req, res) {
     try {
-        const { username, result, attempts, points, achieved } = req.body;
-        if (!username || !result) throw new Error('Data Not Provided');
+        const { rollNumber, result, attempts, points, achieved } = req.body;
+        if (!rollNumber || !result) throw new Error('Roll Number and Result are Required');
 
-        await Results.create({ username, result, attempts, points, achieved });
-        res.status(201).json({ msg: "Result Saved Successfully" });
+        // Check if user exists
+        const user = await User.findOne({ rollNo: rollNumber });
+        if (!user) {
+            return res.status(404).json({ 
+                status: 'error',
+                message: 'User not found with this roll number' 
+            });
+        }
+
+        await Results.create({ rollNumber, result, attempts, points, achieved });
+        res.status(201).json({ 
+            status: 'success',
+            message: "Result Saved Successfully" 
+        });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error });
+        res.status(500).json({ 
+            status: 'error',
+            message: error.message || 'An error occurred while saving the result' 
+        });
     }
 }
 
@@ -91,9 +134,15 @@ export async function storeResult(req, res) {
 export async function dropResult(req, res) {
     try {
         await Results.deleteMany();
-        res.json({ msg: "Results Deleted Successfully" });
+        res.status(200).json({ 
+            status: 'success',
+            message: "Results Deleted Successfully" 
+        });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error });
+        res.status(500).json({ 
+            status: 'error',
+            message: 'An error occurred while deleting results' 
+        });
     }
 }
