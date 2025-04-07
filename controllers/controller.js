@@ -443,3 +443,55 @@ export async function deleteSubject(req, res) {
         });
     }
 }
+
+/** Get results filtered by year, semester, branch, and section */
+export async function getFilteredResults(req, res) {
+    try {
+        const { year, semester, branch, section } = req.query;
+        
+        // Build filter object based on provided parameters
+        const filter = {};
+        
+        if (year) {
+            const yearNum = parseInt(year);
+            filter['rollNumber.year'] = yearNum;
+        }
+        
+        if (semester) {
+            const semesterNum = parseInt(semester);
+            filter['rollNumber.semester'] = semesterNum;
+        }
+        
+        if (branch) {
+            filter['rollNumber.branch'] = branch;
+        }
+        
+        if (section) {
+            filter['rollNumber.section'] = section;
+        }
+        
+        // Get filtered results from the database
+        const results = await Results.find()
+            .populate({
+                path: 'rollNumber',
+                select: 'firstName lastName email year semester section branch rollNo',
+                match: filter
+            })
+            .populate('subject', 'name branch year semester');
+        
+        // Filter out results where rollNumber is null (due to match condition)
+        const filteredResults = results.filter(result => result.rollNumber !== null);
+        
+        res.status(200).json({
+            status: 'success',
+            count: filteredResults.length,
+            data: filteredResults
+        });
+    } catch (error) {
+        console.error('Error in getFilteredResults:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'An error occurred while fetching filtered results'
+        });
+    }
+}

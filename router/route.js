@@ -31,4 +31,8 @@ router.route('/result')
     .post(controller.storeResult)
     .delete(controller.dropResult)
 
+/** Filtered Results Route */
+router.route('/result/filter')
+    .get(controller.getFilteredResults) /** GET Request - Get results filtered by year, semester, branch, and section */
+
 export default router;

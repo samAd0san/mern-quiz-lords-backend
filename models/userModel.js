@@ -8,7 +8,6 @@ const schema = new Schema({
     },
     lastName: {
         type: String,
-        required: true
     },  
     rollNo: {
         type: String,
@@ -18,7 +17,6 @@ const schema = new Schema({
     branch: {
         type: String,
         required: true,
-        uppercase: true
     },
     year: {
         type: Number,
@@ -31,7 +29,6 @@ const schema = new Schema({
     section: {
         type: String,
         required: true,
-        uppercase: true
     },
     email: {
         type: String,
