@@ -4,8 +4,7 @@ const { Schema } = mongoose;
 const resultModel = new Schema({
     rollNumber: { 
         type: String, 
-        required: [true, 'Roll Number is Required'],
-        ref: 'users'
+        required: [true, 'Roll Number is Required']
     },
     subject: {
         type: Schema.Types.ObjectId,

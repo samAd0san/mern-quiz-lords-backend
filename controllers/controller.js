@@ -195,10 +195,13 @@ export async function getResult(req, res) {
 /** Post all results */
 export async function storeResult(req, res) {
     try {
-        const { rollNumber, subjectId, result, attempts, points, achieved } = req.body;
-        if (!rollNumber || !result || !subjectId) throw new Error('Roll Number, Subject ID, and Result are Required');
+        const { rollNumber, subjectId } = req.params;
+        const { result, attempts, points, achieved } = req.body;
 
-        // Check if at least one user exists with this roll number
+        if (!rollNumber || !result || !subjectId) {
+            throw new Error('Roll Number, Subject ID, and Result are Required');
+        }
+
         const user = await User.findOne({ rollNo: rollNumber });
         if (!user) {
             return res.status(404).json({ 
@@ -206,8 +209,7 @@ export async function storeResult(req, res) {
                 message: 'No user found with this roll number' 
             });
         }
-        
-        // Check if subject exists
+
         const subject = await Subject.findById(subjectId);
         if (!subject) {
             return res.status(404).json({ 
@@ -216,7 +218,15 @@ export async function storeResult(req, res) {
             });
         }
 
-        await Results.create({ rollNumber, subject: subjectId, result, attempts, points, achieved });
+        await Results.create({ 
+            rollNumber: user.rollNo, 
+            subject: subjectId, 
+            result, 
+            attempts, 
+            points, 
+            achieved 
+        });
+
         res.status(201).json({ 
             status: 'success',
             message: "Result Saved Successfully" 
@@ -492,6 +502,41 @@ export async function getFilteredResults(req, res) {
         res.status(500).json({
             status: 'error',
             message: 'An error occurred while fetching filtered results'
+        });
+    }
+}
+
+export async function getResultByRollAndSubject(req, res) {
+    try {
+        const { rollNumber, subjectId } = req.query;
+
+        if (!rollNumber || !subjectId) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'rollNumber and subjectId are required'
+            });
+        }
+
+        const result = await Results.findOne({ rollNumber, subject: subjectId })
+            .populate('rollNumber', 'firstName lastName email year semester section rollNo')
+            .populate('subject', 'name branch year semester');
+
+        if (!result) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Result not found'
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            data: result
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            status: 'error',
+            message: 'An error occurred while fetching the result'
         });
     }
 }

@@ -26,13 +26,19 @@ router.route('/subjects/:id')
 router.route('/subjects/branch/:branch/year/:year/semester/:semester')
     .get(controller.getSubjectsByBranchYearSemester) /** GET Request - Get subjects by branch, year, and semester */
 
+router.route('/result/:rollNumber/:subjectId')
+    .post(controller.storeResult)
+
 router.route('/result')
     .get(controller.getResult)
-    .post(controller.storeResult)
     .delete(controller.dropResult)
 
 /** Filtered Results Route */
 router.route('/result/filter')
     .get(controller.getFilteredResults) /** GET Request - Get results filtered by year, semester, branch, and section */
+
+/** Get result by rollNumber and subjectId */
+router.route('/result/filter/:rollNumber/:subjectId')
+    .get(controller.getResultByRollAndSubject)
 
 export default router;
