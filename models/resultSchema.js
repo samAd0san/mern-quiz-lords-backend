@@ -4,12 +4,23 @@ const { Schema } = mongoose;
 const resultModel = new Schema({
     rollNumber: { 
         type: String, 
-        required: [true, 'Roll Number is Required']
+        required: [true, 'Roll Number is Required'],
+        ref: 'users'
+    },
+    user: {
+        type: Schema.Types.ObjectId,
+        ref: 'users',
+        required: [true, 'User reference is required']
     },
     subject: {
         type: Schema.Types.ObjectId,
         ref: 'Subject',
         required: [true, 'Subject reference is required']
+    },
+    set: {
+        type: String,
+        enum: ['setOne', 'setTwo', 'setThree'],
+        required: [true, 'Set information is required']
     },
     result: { type: Array, default: []},
     attempts: { type: Number, default: 0},

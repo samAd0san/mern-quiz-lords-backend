@@ -176,12 +176,21 @@ export async function getResult(req, res) {
         }
         
         const results = await Results.find(query)
-            .populate('rollNumber', 'firstName lastName email year semester section')
+            .populate('user', 'firstName lastName email year semester section branch rollNo')
             .populate('subject', 'name branch year semester');
+            
+        // Map the results to include rollNumber from the user object
+        const mappedResults = results.map(result => {
+            const resultObj = result.toObject();
+            if (resultObj.user && resultObj.user.rollNo) {
+                resultObj.rollNumber = resultObj.user.rollNo;
+            }
+            return resultObj;
+        });
             
         res.status(200).json({
             status: 'success',
-            data: results
+            data: mappedResults
         });
     } catch (error) {
         console.error(error);
@@ -196,10 +205,10 @@ export async function getResult(req, res) {
 export async function storeResult(req, res) {
     try {
         const { rollNumber, subjectId } = req.params;
-        const { result, attempts, points, achieved } = req.body;
+        const { result, attempts, points, achieved, set } = req.body;
 
-        if (!rollNumber || !result || !subjectId) {
-            throw new Error('Roll Number, Subject ID, and Result are Required');
+        if (!rollNumber || !result || !subjectId || !set) {
+            throw new Error('Roll Number, Subject ID, Result, and Set are Required');
         }
 
         const user = await User.findOne({ rollNo: rollNumber });
@@ -220,7 +229,9 @@ export async function storeResult(req, res) {
 
         await Results.create({ 
             rollNumber: user.rollNo, 
-            subject: subjectId, 
+            user: user._id,
+            subject: subjectId,
+            set: set,
             result, 
             attempts, 
             points, 
@@ -454,48 +465,54 @@ export async function deleteSubject(req, res) {
     }
 }
 
-/** Get results filtered by year, semester, branch, and section */
+/** Get results filtered by year, semester, branch, and section or any one of them */
 export async function getFilteredResults(req, res) {
     try {
         const { year, semester, branch, section } = req.query;
         
         // Build filter object based on provided parameters
-        const filter = {};
+        const userFilter = {};
         
         if (year) {
             const yearNum = parseInt(year);
-            filter['rollNumber.year'] = yearNum;
+            userFilter.year = yearNum;
         }
         
         if (semester) {
             const semesterNum = parseInt(semester);
-            filter['rollNumber.semester'] = semesterNum;
+            userFilter.semester = semesterNum;
         }
         
         if (branch) {
-            filter['rollNumber.branch'] = branch;
+            userFilter.branch = branch;
         }
         
         if (section) {
-            filter['rollNumber.section'] = section;
+            userFilter.section = section;
         }
         
+        // Find users matching the filter criteria
+        const users = await User.find(userFilter, '_id');
+        const userIds = users.map(user => user._id);
+        
         // Get filtered results from the database
-        const results = await Results.find()
-            .populate({
-                path: 'rollNumber',
-                select: 'firstName lastName email year semester section branch rollNo',
-                match: filter
-            })
+        const results = await Results.find({ user: { $in: userIds } })
+            .populate('user', 'firstName lastName email year semester section branch rollNo')
             .populate('subject', 'name branch year semester');
         
-        // Filter out results where rollNumber is null (due to match condition)
-        const filteredResults = results.filter(result => result.rollNumber !== null);
+        // Map the results to include rollNumber from the user object
+        const mappedResults = results.map(result => {
+            const resultObj = result.toObject();
+            if (resultObj.user && resultObj.user.rollNo) {
+                resultObj.rollNumber = resultObj.user.rollNo;
+            }
+            return resultObj;
+        });
         
         res.status(200).json({
             status: 'success',
-            count: filteredResults.length,
-            data: filteredResults
+            count: mappedResults.length,
+            data: mappedResults
         });
     } catch (error) {
         console.error('Error in getFilteredResults:', error);
@@ -508,7 +525,7 @@ export async function getFilteredResults(req, res) {
 
 export async function getResultByRollAndSubject(req, res) {
     try {
-        const { rollNumber, subjectId } = req.query;
+        const { rollNumber, subjectId } = req.params;
 
         if (!rollNumber || !subjectId) {
             return res.status(400).json({
@@ -517,8 +534,18 @@ export async function getResultByRollAndSubject(req, res) {
             });
         }
 
-        const result = await Results.findOne({ rollNumber, subject: subjectId })
-            .populate('rollNumber', 'firstName lastName email year semester section rollNo')
+        // Find the user by rollNumber
+        const user = await User.findOne({ rollNo: rollNumber });
+        if (!user) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'User not found with this roll number'
+            });
+        }
+
+        // Find the result by user ID and subject ID
+        const result = await Results.findOne({ user: user._id, subject: subjectId })
+            .populate('user', 'firstName lastName email year semester section branch rollNo')
             .populate('subject', 'name branch year semester');
 
         if (!result) {
@@ -528,9 +555,13 @@ export async function getResultByRollAndSubject(req, res) {
             });
         }
 
+        // Convert to object and add rollNumber
+        const resultObj = result.toObject();
+        resultObj.rollNumber = user.rollNo;
+
         res.status(200).json({
             status: 'success',
-            data: result
+            data: resultObj
         });
     } catch (error) {
         console.error(error);
